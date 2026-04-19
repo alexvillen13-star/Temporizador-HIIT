@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#1a1a1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 20px 32px;min-height:100vh}
+
+  /* CONFIG */
+  .config{width:100%;max-width:360px;margin-bottom:28px}
+  .cfg-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #2e2e2e}
+  .cfg-row:last-child{border-bottom:none}
+  .cfg-label{font-size:13px;color:#888;min-width:130px}
+  .cfg-val{font-size:13px;font-weight:500;min-width:30px;text-align:right;color:#fff}
+  input[type=range]{flex:1;-webkit-appearance:none;height:2px;background:#3a3a3a;border-radius:1px;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:#fff;border-radius:50%;cursor:pointer}
+
+  /* TIMER FACE */
+  .face{width:100%;max-width:360px;text-align:center;padding:12px 0 24px}
+  .phase-label{font-size:11px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#666;margin-bottom:10px;min-height:16px}
+  .time-display{font-size:88px;font-weight:300;letter-spacing:-4px;line-height:1;font-variant-numeric:tabular-nums;margin-bottom:10px}
+  .sub-text{font-size:14px;color:#666;margin-bottom:22px;min-height:20px}
+  .progress-wrap{width:100%;height:2px;background:#2e2e2e;border-radius:1px;margin-bottom:22px}
+  .progress-bar{height:2px;border-radius:1px;background:#fff;transition:width 0.9s linear}
+  .next-label{font-size:12px;color:#555;min-height:16px}
+
+  /* DOTS */
+  .dot-row{display:flex;justify-content:center;gap:6px;flex-wrap:wrap;margin-bottom:24px;min-height:8px}
+  .dot{width:6px;height:6px;border-radius:50%;background:#2e2e2e;transition:background 0.3s,transform 0.2s}
+  .dot.done{background:#555}
+  .dot.current{background:#fff;transform:scale(1.3)}
+
+  /* BUTTONS */
+  .controls{display:flex;gap:10px;width:100%;max-width:360px;margin-bottom:24px}
+  .btn{flex:1;border:1.5px solid #3a3a3a;background:transparent;color:#fff;border-radius:10px;padding:13px 0;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit;transition:background 0.15s,transform 0.1s}
+  .btn:hover{background:#2a2a2a}
+  .btn:active{transform:scale(0.97)}
+  .btn-main{background:#fff;color:#1a1a1a;border-color:#fff}
+  .btn-main:hover{background:#e8e8e8}
+
+  /* SUMMARY */
+  .summary{width:100%;max-width:360px;display:none}
+  .sum-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+  .stat{background:#222;border-radius:10px;padding:14px 8px;text-align:center}
+  .stat-val{font-size:22px;font-weight:300}
+  .stat-lbl{font-size:11px;color:#666;margin-top:4px;letter-spacing:0.3px}
+</style>
+</head>
+<body>
+
+<div class="config" id="configPanel">
+  <div class="cfg-row">
+    <span class="cfg-label">Intervalos</span>
+    <input type="range" id="sRounds" min="2" max="20" value="8" step="1">
+    <span class="cfg-val" id="vRounds">8</span>
+  </div>
+  <div class="cfg-row">
+    <span class="cfg-label">Trabajo (seg)</span>
+    <input type="range" id="sWork" min="10" max="90" value="40" step="5">
+    <span class="cfg-val" id="vWork">40</span>
+  </div>
+  <div class="cfg-row">
+    <span class="cfg-label">Descanso activo (seg)</span>
+    <input type="range" id="sRest" min="5" max="60" value="20" step="5">
+    <span class="cfg-val" id="vRest">20</span>
+  </div>
+  <div class="cfg-row">
+    <span class="cfg-label">Preparación (seg)</span>
+    <input type="range" id="sPrep" min="3" max="15" value="5" step="1">
+    <span class="cfg-val" id="vPrep">5</span>
+  </div>
+</div>
+
+<div class="face">
+  <div class="phase-label" id="phaseLabel"></div>
+  <div class="time-display" id="timeBig">—</div>
+  <div class="sub-text" id="subText">Empieza cuando estés listo</div>
+  <div class="progress-wrap"><div class="progress-bar" id="progBar" style="width:100%"></div></div>
+  <div class="dot-row" id="dotRow"></div>
+  <div class="next-label" id="nextLabel"></div>
+</div>
+
+<div class="controls">
+  <button class="btn btn-main" id="btnStart" onclick="startTimer()">Iniciar</button>
+  <button class="btn" id="btnReset" onclick="resetTimer()" style="display:none">Reset</button>
+</div>
+
+<div class="summary" id="summary">
+  <div class="sum-grid">
+    <div class="stat"><div class="stat-val" id="sDone">—</div><div class="stat-lbl">Intervalos</div></div>
+    <div class="stat"><div class="stat-val" id="sTime">—</div><div class="stat-lbl">Duración</div></div>
+    <div class="stat"><div class="stat-val" id="sKcal">—</div><div class="stat-lbl">kcal aprox.</div></div>
+  </div>
+</div>
+
+<script>
+const AC=new(window.AudioContext||window.webkitAudioContext)();
+function beep(f,d,v=0.18){const o=AC.createOscillator(),g=AC.createGain();o.connect(g);g.connect(AC.destination);o.frequency.value=f;g.gain.value=v;o.start();o.stop(AC.currentTime+d)}
+function beepWork(){beep(700,0.08);setTimeout(()=>beep(900,0.12),110)}
+function beepRest(){beep(500,0.08,0.13);setTimeout(()=>beep(420,0.13,0.13),110)}
+function beepDone(){[350,440,550,660].forEach((f,i)=>setTimeout(()=>beep(f,0.13,0.22),i*100))}
+function beepTick(){beep(1000,0.03,0.09)}
+
+['sRounds','sWork','sRest','sPrep'].forEach(id=>{
+  const vid='v'+id[1].toUpperCase()+id.slice(2);
+  document.getElementById(id).oninput=function(){
+    document.getElementById(vid).textContent=this.value;
+    if(!running) renderDots(cfg().rounds,0,-1);
+  };
+});
+
+function cfg(){return{rounds:+sRounds.value,work:+sWork.value,rest:+sRest.value,prep:+sPrep.value}}
+function fmt(s){return(s<10?'0':'')+s}
+function fmtMin(s){const m=Math.floor(s/60),ss=s%60;return m>0?m+'m '+ss+'s':ss+'s'}
+
+function renderDots(rounds,done,current){
+  const row=document.getElementById('dotRow');
+  row.innerHTML='';
+  for(let i=0;i<rounds;i++){
+    const d=document.createElement('div');
+    d.className='dot'+(i<done?' done':i===current?' current':'');
+    row.appendChild(d);
+  }
+}
+
+let ticker=null,phase='idle',curRound=0,timeLeft=0,phaseDur=0,totalElapsed=0,running=false;
+
+function startTimer(){
+  if(AC.state==='suspended')AC.resume();
+  const c=cfg();
+  running=true;
+  configPanel.style.opacity='0.3';
+  configPanel.style.pointerEvents='none';
+  btnStart.style.display='none';
+  btnReset.style.display='';
+  summary.style.display='none';
+  totalElapsed=0;curRound=0;
+  startPhase('prep',c);
+}
+
+function startPhase(ph,c){
+  phase=ph;
+  const nextRound=ph==='work'?curRound+1:curRound;
+  if(ph==='prep'){
+    phaseLabel.textContent='Preparación';
+    subText.textContent='Empieza cuando estés listo';
+    nextLabel.textContent='A continuación: Ronda 1 — Intenso';
+    progBar.style.background='#555';
+    phaseDur=timeLeft=c.prep;
+    renderDots(c.rounds,0,-1);
+  } else if(ph==='work'){
+    phaseLabel.textContent='Intenso';
+    subText.textContent='Ronda '+(curRound+1)+' de '+c.rounds;
+    const hasNext=curRound+1<c.rounds;
+    nextLabel.textContent=hasNext?'A continuación: Descanso activo':'Último intervalo';
+    progBar.style.background='#fff';
+    phaseDur=timeLeft=c.work;
+    renderDots(c.rounds,curRound,curRound);
+    beepWork();
+  } else if(ph==='rest'){
+    phaseLabel.textContent='Descanso activo';
+    subText.textContent='Ronda '+(curRound+1)+' de '+c.rounds;
+    const hasNext=curRound+1<c.rounds;
+    nextLabel.textContent=hasNext?'A continuación: Ronda '+(curRound+2)+' — Intenso':'Última ronda completada';
+    progBar.style.background='#888';
+    phaseDur=timeLeft=c.rest;
+    renderDots(c.rounds,curRound,curRound);
+    beepRest();
+  } else if(ph==='done'){
+    phaseLabel.textContent='Completado';
+    timeBig.textContent='—';
+    subText.textContent='Buen trabajo';
+    nextLabel.textContent='';
+    progBar.style.width='100%';
+    renderDots(c.rounds,c.rounds,-1);
+    beepDone();
+    showSummary(c);
+    return;
+  }
+  tick(c);
+}
+
+function tick(c){
+  clearInterval(ticker);
+  render();
+  ticker=setInterval(()=>{
+    totalElapsed++;timeLeft--;
+    if(timeLeft>0&&timeLeft<=3)beepTick();
+    if(timeLeft<=0){clearInterval(ticker);advance(c);}
+    else render();
+  },1000);
+}
+
+function render(){
+  const m=Math.floor(timeLeft/60),s=timeLeft%60;
+  timeBig.textContent=m>0?m+':'+fmt(s):fmt(s);
+  progBar.style.width=(timeLeft/phaseDur*100)+'%';
+}
+
+function advance(c){
+  if(phase==='prep'){curRound=0;startPhase('work',c);}
+  else if(phase==='work'){startPhase('rest',c);}
+  else if(phase==='rest'){curRound++;curRound>=c.rounds?startPhase('done',c):startPhase('work',c);}
+}
+
+function resetTimer(){
+  clearInterval(ticker);running=false;
+  phase='idle';curRound=0;timeLeft=0;
+  phaseLabel.textContent='';
+  timeBig.textContent='—';
+  subText.textContent='Empieza cuando estés listo';
+  nextLabel.textContent='';
+  progBar.style.width='100%';
+  configPanel.style.opacity='1';
+  configPanel.style.pointerEvents='';
+  btnStart.style.display='';
+  btnReset.style.display='none';
+  summary.style.display='none';
+  renderDots(cfg().rounds,0,-1);
+}
+
+function showSummary(c){
+  summary.style.display='';
+  sDone.textContent=c.rounds;
+  sTime.textContent=fmtMin(totalElapsed);
+  sKcal.textContent='~'+Math.round(totalElapsed/60*8);
+}
+
+renderDots(cfg().rounds,0,-1);
+</script>
+</body>
+</html>
