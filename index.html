@@ -8,18 +8,18 @@
   html,body{height:100%;background:#1a1a1a;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;overflow-x:hidden}
   body{display:flex;flex-direction:column;align-items:center;padding:env(safe-area-inset-top,24px) 24px env(safe-area-inset-bottom,32px);min-height:100vh}
 
-  /* PHASE TINT — full-bleed subtle background color */
   .tint{position:fixed;inset:0;z-index:0;transition:background 0.6s ease;pointer-events:none}
-
   .inner{position:relative;z-index:1;width:100%;max-width:380px;display:flex;flex-direction:column;align-items:center}
 
   /* CONFIG */
   .config{width:100%;margin-bottom:32px;margin-top:8px}
-  .cfg-row{display:flex;align-items:center;gap:14px;padding:13px 0;border-bottom:1px solid #2a2a2a}
+  .cfg-row{display:flex;align-items:center;gap:10px;padding:13px 0;border-bottom:1px solid #2a2a2a}
   .cfg-row:last-child{border-bottom:none}
-  .cfg-label{font-size:13px;color:#777;min-width:136px}
-  .cfg-val{font-size:14px;font-weight:500;min-width:28px;text-align:right}
-  input[type=range]{flex:1;-webkit-appearance:none;appearance:none;height:4px;background:#333;border-radius:2px;outline:none}
+  .cfg-label{font-size:13px;color:#777;min-width:100px;flex-shrink:0}
+  .cfg-val{font-size:14px;font-weight:500;min-width:28px;text-align:right;flex-shrink:0}
+  .step-btn{width:30px;height:30px;border-radius:50%;border:1.5px solid #3a3a3a;background:transparent;color:#ccc;font-size:17px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s,transform 0.1s}
+  .step-btn:active{transform:scale(0.9);background:#2a2a2a}
+  input[type=range]{flex:1;min-width:0;-webkit-appearance:none;appearance:none;height:4px;background:#333;border-radius:2px;outline:none}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:26px;height:26px;background:#fff;border-radius:50%;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,0.5)}
 
   /* FACE */
@@ -68,22 +68,30 @@
   <div class="config" id="configPanel">
     <div class="cfg-row">
       <span class="cfg-label">Intervalos</span>
+      <button class="step-btn" onclick="step('sRounds',-1)">−</button>
       <input type="range" id="sRounds" min="2" max="20" value="8" step="1">
+      <button class="step-btn" onclick="step('sRounds',1)">+</button>
       <span class="cfg-val" id="vRounds">8</span>
     </div>
     <div class="cfg-row">
       <span class="cfg-label">Trabajo (seg)</span>
-      <input type="range" id="sWork" min="10" max="120" value="40" step="5">
+      <button class="step-btn" onclick="step('sWork',-1)">−</button>
+      <input type="range" id="sWork" min="10" max="360" value="40" step="5">
+      <button class="step-btn" onclick="step('sWork',1)">+</button>
       <span class="cfg-val" id="vWork">40</span>
     </div>
     <div class="cfg-row">
-      <span class="cfg-label">Descanso activo (seg)</span>
-      <input type="range" id="sRest" min="5" max="120" value="20" step="5">
+      <span class="cfg-label">Descanso (seg)</span>
+      <button class="step-btn" onclick="step('sRest',-1)">−</button>
+      <input type="range" id="sRest" min="10" max="360" value="20" step="5">
+      <button class="step-btn" onclick="step('sRest',1)">+</button>
       <span class="cfg-val" id="vRest">20</span>
     </div>
     <div class="cfg-row">
       <span class="cfg-label">Preparación (seg)</span>
-      <input type="range" id="sPrep" min="3" max="15" value="5" step="1">
+      <button class="step-btn" onclick="step('sPrep',-1)">−</button>
+      <input type="range" id="sPrep" min="10" max="360" value="10" step="5">
+      <button class="step-btn" onclick="step('sPrep',1)">+</button>
       <span class="cfg-val" id="vPrep">5</span>
     </div>
   </div>
@@ -134,14 +142,12 @@ function tone(freq, dur, vol=0.2, type='sine'){
 }
 
 function playWork(){
-  // punchy ascending
   tone(220,0.08,0.3,'sawtooth');
   setTimeout(()=>tone(330,0.08,0.3,'sawtooth'),80);
   setTimeout(()=>tone(440,0.12,0.35,'sawtooth'),160);
 }
 
 function playRest(){
-  // smooth descending
   tone(660,0.15,0.2,'sine');
   setTimeout(()=>tone(550,0.15,0.2,'sine'),140);
   setTimeout(()=>tone(440,0.2,0.18,'sine'),280);
@@ -161,6 +167,15 @@ function playTick(){ tone(1100,0.04,0.1,'sine') }
     if(!running) renderDots(cfg().rounds,0,-1);
   };
 });
+
+function step(id,dir){
+  const el=document.getElementById(id);
+  const stepVal=+el.step||1, min=+el.min, max=+el.max;
+  let val=+el.value + dir*stepVal;
+  val=Math.max(min,Math.min(max,val));
+  el.value=val;
+  el.dispatchEvent(new Event('input'));
+}
 
 function cfg(){return{rounds:+sRounds.value,work:+sWork.value,rest:+sRest.value,prep:+sPrep.value}}
 function fmt(s){return(s<10?'0':'')+s}
@@ -272,12 +287,10 @@ function skipPhase(dir){
   clearInterval(ticker);
   const c=savedCfg;
   if(dir===1){
-    // forward
     if(phase==='prep'){curRound=0;startPhase('work');}
     else if(phase==='work'){startPhase('rest');}
     else if(phase==='rest'){curRound++;curRound>=c.rounds?startPhase('done'):startPhase('work');}
   } else {
-    // back
     if(phase==='prep'){startPhase('prep');}
     else if(phase==='work'){
       if(curRound===0) startPhase('prep');
